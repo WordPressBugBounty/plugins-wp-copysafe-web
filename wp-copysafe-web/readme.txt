@@ -4,8 +4,7 @@ Contributors: ArtistScope
 Donate link: https://artistscope.com/copysafe_web_protection_wordpress_plugin.asp
 Tags: copy protect, protect image, protect page, prevent copy, prevent screenshot
 Requires at least: 5.0
-Tested up to: 6.6
-Requires at least: 5.0
+Tested up to: 6.7
 Stable tag: 4.1
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
