@@ -114,7 +114,14 @@ function wpcsw_shortcode($atts)
 			cswbody.setAttribute("onContextmenu", "return false;");
 		}
 	</script>
+	<?php
+	if( ! defined('WPCSW_SCRIPT_LOADED')) {
+	?>
 	<<?php echo esc_html($script_tag); ?> src="<?php echo esc_attr(WPCSW_PLUGIN_URL . 'js/wp-copysafe-web.js?v=' . urlencode(WPCSW_ASSET_VERSION)); ?>"></<?php echo esc_html($script_tag); ?>>
+	<?php
+		define('WPCSW_SCRIPT_LOADED', true);
+	}
+	?>
 	<div>
 		 <script type="text/javascript">
 			//hide JavaScript from non-JavaScript browsers
