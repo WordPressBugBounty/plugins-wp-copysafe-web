@@ -53,7 +53,7 @@ You can upload new image .class files or select from a list of already uploaded 
 * Enable or disable use of browser menus
 * Enable or disable use of the keyboard
 
-For more information visit the [CopySafe Web Protection](https://www.artistscope.com/copysafe_web_protection_wordpress_plugin.asp) plugin page at ArtistScope.
+For more information visit the [CopySafe Web Protection](https://artistscope.com/copysafe_web_protection_wordpress_plugin.asp) plugin page at ArtistScope.
 
 == Installation ==
 
