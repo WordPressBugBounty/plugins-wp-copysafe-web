@@ -55,6 +55,10 @@ You can upload new image .class files or select from a list of already uploaded 
 
 For more information visit the [CopySafe Web Protection](https://artistscope.com/copysafe_web_protection_wordpress_plugin.asp) plugin page at ArtistScope.
 
+#### More Info
+
+* About [Copy Protection](https://artistscope.com/copy-protection.asp)
+
 == Installation ==
 
 This section describes how to install the plugin and get it working.
