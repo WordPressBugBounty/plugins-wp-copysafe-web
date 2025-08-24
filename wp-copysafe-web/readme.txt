@@ -5,7 +5,7 @@ Donate link: https://artistscope.com/copysafe_web_protection_wordpress_plugin.as
 Tags: copy protect, protect image, protect page, prevent copy, prevent screenshot
 Requires at least: 5.0
 Tested up to: 6.8
-Stable tag: 4.2
+Stable tag: 4.3
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -96,6 +96,9 @@ Nothing that is safe from PrintScreen or screen capture unless they run Windows 
 3. A file list can be displayed showing all CopySafe Web images that have been uploaded.
 
 == Changelog ==
+
+= 4.3 =
+* Security fix related to logged-in users.
 
 = 4.2 =
 * Security fix and compatibility check for WP 6.8.

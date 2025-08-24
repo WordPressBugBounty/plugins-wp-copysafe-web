@@ -5,6 +5,10 @@ if (!defined('ABSPATH')) {
 
 function wpcsw_ajaxprocess()
 {
+	if( ! current_user_can('manage_options')) {
+		wp_send_json_error();
+	}
+
 	if ($_POST["fucname"] == "check_upload_nonce")
 	{
 		if (!wp_verify_nonce($_POST['nonce_value'], 'wpcsw_upload_nonce')) {
