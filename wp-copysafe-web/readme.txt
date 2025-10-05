@@ -1,8 +1,8 @@
-=== CopySafe Web Protection ===
+=== CopySafe Web Protection - Copy Protect Images ===
 
 Contributors: ArtistScope
 Donate link: https://artistscope.com/copysafe_web_protection_wordpress_plugin.asp
-Tags: copy protect, protect image, protect page, prevent copy, prevent screenshot
+Tags: copy protect, protect image, protect web page, prevent copy, prevent screenshot
 Requires at least: 5.0
 Tested up to: 6.8
 Stable tag: 4.3
