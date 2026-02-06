@@ -10,7 +10,7 @@ function wpcsw_admin_page_list()
 {
 	$msg = '';
 	$table = '';
-	$files = _get_wpcsw_uploadfile_list();
+	$files = wpcsw_get_uploaded_files();
 
 	if (!empty($_POST))
 	{
@@ -27,14 +27,18 @@ function wpcsw_admin_page_list()
 		// Check if image file is a actual image or fake image
 		if (isset($_POST["copysafe-web-class-submit"]))
 		{
-			if (wp_verify_nonce($_POST['wpcopysafeweb_wpnonce'], 'wpcopysafeweb_settings'))
+			$wpcopysafeweb_wpnonce = isset($_POST['wpcopysafeweb_wpnonce']) ? sanitize_text_field(wp_unslash($_POST['wpcopysafeweb_wpnonce'])) : '';
+
+			if (wp_verify_nonce($wpcopysafeweb_wpnonce, 'wpcopysafeweb_settings'))
 			{
-				$target_file = $target_dir . basename($_FILES["copysafe-web-class"]["name"]);
+				$file_name = isset($_FILES["copysafe-web-class"]["name"]) ? sanitize_text_field(wp_unslash($_FILES["copysafe-web-class"]["name"])) : '';
+
+				$target_file = $target_dir . basename($file_name);
 				$uploadOk = 1;
 				$imageFileType = strtolower(pathinfo($target_file, PATHINFO_EXTENSION));
 				
 				// Allow only .class file formats
-				if ($_FILES["copysafe-web-class"]["name"] == "")
+				if ($file_name == "")
 				{
 					$msg .= '<div class="error"><p><strong>' . esc_html(__('Please upload file to continue.', 'wp-copysafe-web')) . '</strong></p></div>';
 					$uploadOk = 0;
@@ -52,13 +56,26 @@ function wpcsw_admin_page_list()
 				}
 				else
 				{
-					$upload_file = $_FILES["copysafe-web-class"];
+					$file_data_keys = [
+						'name',
+						'tmp_name',
+						'size',
+						'error',
+						'type',
+					];
+					$file_data = [];
+					foreach($file_data_keys as $file_data_key)
+					{
+						$file_data[$file_data_key] =
+							isset($_FILES['copysafe-web-class'][$file_data_key]) ?
+								sanitize_text_field($_FILES['copysafe-web-class'][$file_data_key]) : '';
+					}
 
 					//Register path override
 					add_filter('upload_dir', 'wpcsw_upload_dir');
 
 					//Move file
-					$movefile = wp_handle_upload($upload_file, [
+					$movefile = wp_handle_upload($file_data, [
 						'test_form' => false,
 						'test_type' => false,
 						'mimes' => [
@@ -72,14 +89,14 @@ function wpcsw_admin_page_list()
 					if ($movefile && ! isset($movefile['error']))
 					{
 						$base_url = get_site_url();
-						$msg .= '<div class="updated"><p><strong>' . 'The file ' . esc_html(basename($_FILES["copysafe-web-class"]["name"])) . ' has been uploaded. Click <a href="' . esc_attr($base_url) . '/wp-admin/admin.php?page=wpcsw_list">here</a> to update below list.' . '</strong></p></div>';
+						$msg .= '<div class="updated"><p><strong>' . 'The file ' . esc_html(basename($file_name)) . ' has been uploaded. Click <a href="' . esc_attr($base_url) . '/wp-admin/admin.php?page=wpcsw_list">here</a> to update below list.' . '</strong></p></div>';
 					}
 					else
 					{
-						$msg .= '<div class="error"><p><strong>' . esc_html(__('Sorry, there was an error uploading your file.', 'wp-copysafe-web')) . '</strong></p></div>';
+						$msg .= '<div class="error"><p><strong>' . esc_html(__('Sorry, there was an error uploading your file. Check write permissions on the upload folder.', 'wp-copysafe-web')) . '</strong></p></div>';
 					}
 				}
-			} //nounce
+			} //nonce
 		}
 	}
 
@@ -121,11 +138,11 @@ function wpcsw_admin_page_list()
   ?>
     <div class="wrap">
         <div class="icon32" id="icon-file"><br/></div>
-        <?php echo wp_kses($msg, wpcsw_kses_allowed_options()); ?>
+        <?php echo wp_kses($msg, wpcsw_instance()->settings->kses_allowed_options()); ?>
         <h2>List Class Files</h2>
         <?php if ($display_upload_form): ?>
             <form action="" method="post" enctype="multipart/form-data">
-                <?php echo wp_kses(wp_nonce_field('wpcopysafeweb_settings', 'wpcopysafeweb_wpnonce'), wpcsw_kses_allowed_options()); ?>
+                <?php echo wp_kses(wp_nonce_field('wpcopysafeweb_settings', 'wpcopysafeweb_wpnonce'), wpcsw_instance()->settings->kses_allowed_options()); ?>
                 <input type="file" name="copysafe-web-class" value=""/>
                 <input type="submit" name="copysafe-web-class-submit"
                        value="Upload"/>
@@ -146,7 +163,7 @@ function wpcsw_admin_page_list()
                     </tr>
                     </thead>
                     <tbody>
-                    <?php echo wp_kses($table, wpcsw_kses_allowed_options()); ?>
+                    <?php echo wp_kses($table, wpcsw_instance()->settings->kses_allowed_options()); ?>
                     </tbody>
                     <tfoot>
                     <tr>
@@ -172,14 +189,55 @@ function wpcsw_admin_page_settings()
 	$wp_upload_dir = wp_upload_dir();
 	$wp_upload_dir_path = str_replace("\\", "/", $wp_upload_dir['basedir']);
 
+	$watermarked = '';
+	$wtmtextsize = '';
+	$wtmtextcolour = '';
+	$wtmshadecolour = '';
+	$wtmtextposition = '';
+	$wtmtextopacity = '';
+
+	$allow_mac = 'yes';
+	$allow_ios = 'yes';
+	$allow_linux = 'yes';
+	$allow_android = 'yes';
+	$allow_remote = 'yes';
+
+	$version_mac = '';
+	$version_ios = '';
+	$version_linux = '';
+	$version_android = '';
+	$version_windows = '';
+
+	$wtm_text_size_options = wpcsw_instance()->data->getWatermarkTextSizes();
+	$wtm_text_colour_options = wpcsw_instance()->data->getWatermarkColors();
+	$wtm_shade_colour_options = wpcsw_instance()->data->getWatermarkShades();
+	$wtm_text_position_options = wpcsw_instance()->data->getWatermarkPositions();
+	$wtm_text_opacity_options = wpcsw_instance()->data->getWatermarkOpacities();
+
 	if (!empty($_POST))
 	{
-		if (wp_verify_nonce($_POST['wpcopysafeweb_wpnonce'], 'wpcopysafeweb_settings'))
+		if(isset($_POST['wpcopysafeweb_wpnonce']) && wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['wpcopysafeweb_wpnonce'])), 'wpcopysafeweb_settings'))
 		{
 			$wpcsw_options = get_option('wpcsw_settings');
 			extract($_POST, EXTR_OVERWRITE);
+
+			if( ! isset($_POST['allow_mac'])) {
+				$allow_mac = 'no';
+			}
+			
+			if( ! isset($_POST['allow_ios'])) {
+				$allow_ios = 'no';
+			}
+			
+			if( ! isset($_POST['allow_linux'])) {
+				$allow_linux = 'no';
+			}
+			
+			if( ! isset($_POST['allow_android'])) {
+				$allow_android = 'no';
+			}
 		
-			if (!$upload_path) {
+			if( ! $upload_path) {
 				$upload_path = 'copysafe-web/';
 			}
 			else
@@ -192,14 +250,28 @@ function wpcsw_admin_page_settings()
 				$upload_path .= "/";
 			}
 
+			$watermarked = '';
+
 			$wpcsw_options['settings'] = [
-				'admin_only' => sanitize_text_field($admin_only),
 				'upload_path' => $upload_path,
 				'mode' => sanitize_text_field($mode),
-				'asps' => !empty(sanitize_text_field($asps))  ? 'checked' : '',
-				'ff' => !empty(sanitize_text_field($ff)) ? 'checked' : '',
-				'ch' => !empty(sanitize_text_field($ch)) ? 'checked' : '',
-				'latest_version' => $latest_version,
+				'watermarked' => empty($watermarked) ? '' : 'checked',
+				'wtmtextsize' => sanitize_text_field($wtmtextsize),
+				'wtmtextcolour' => sanitize_text_field($wtmtextcolour),
+				'wtmshadecolour' => sanitize_text_field($wtmshadecolour),
+				'wtmtextposition' => sanitize_text_field($wtmtextposition),
+				'wtmtextopacity' => sanitize_text_field($wtmtextopacity),
+				'allow_windows' => 'yes',
+				'allow_mac' => $allow_mac == 'yes' ? 'yes' : 'no',
+				'allow_ios' => $allow_ios == 'yes' ? 'yes' : 'no',
+				'allow_linux' => $allow_linux == 'yes' ? 'yes' : 'no',
+				'allow_android' => $allow_android == 'yes' ? 'yes' : 'no',
+				'allow_remote' => $allow_remote == 'yes' ? 'yes' : 'no',
+				'version_windows' => sanitize_text_field($version_windows),
+				'version_mac' => sanitize_text_field($version_mac),
+				'version_ios' => sanitize_text_field($version_ios),
+				'version_linux' => sanitize_text_field($version_linux),
+				'version_android' => sanitize_text_field($version_android),
 			];
 
 			$max_upload_size = wp_max_upload_size();
@@ -215,127 +287,239 @@ function wpcsw_admin_page_settings()
 			}
 
 			update_option('wpcsw_settings', $wpcsw_options);
-			$msg = '<div class="updated"><p><strong>' . __('Settings Saved') . '</strong></p></div>';
+			$msg = '<div class="updated"><p><strong>' . __('Settings Saved', 'wp-copysafe-web') . '</strong></p></div>';
 		} //nounce
 	}
 
 	$wpcsw_options = get_option('wpcsw_settings');
-	if ($wpcsw_options["settings"]) {
+	if ($wpcsw_options["settings"])
+	{
 		extract($wpcsw_options["settings"], EXTR_OVERWRITE);
 	}
 
 	$upload_dir = $wp_upload_dir_path . '/' . $upload_path;
 
 	if (!is_dir($upload_dir)) {
-		$msg = '<div class="updated"><p><strong>' . __('Upload directory doesn\'t exist.') . '</strong></p></div>';
+		$msg = '<div class="updated"><p><strong>' . __('Upload directory doesn\'t exist.', 'wp-copysafe-web') . '</strong></p></div>';
 	}
 
-	$select = '<option value="demo">Demo Mode</option><option value="licensed">Licensed</option><option value="debug">Debugging Mode</option>';
+	$select =
+		'<option value="licensed">Active</option>
+		<option value="debug">Debug Mode</option>
+		<option value="demo">Placeholder</option>';
 	$select = str_replace('value="' . $mode . '"', 'value="' . $mode . '" selected', $select);
 	?>
     <style type="text/css">#wpcsw_page_setting img { cursor: pointer; }</style>
     <div class="wrap">
         <div class="icon32" id="icon-settings"><br/></div>
-        <?php echo wp_kses($msg, wpcsw_kses_allowed_options()); ?>
+        <?php echo wp_kses($msg, wpcsw_instance()->settings->kses_allowed_options()); ?>
         <h2> Default Settings</h2>
+
+        <div class="card">
+        <h3><?php echo esc_html__('CopySafe Web - Setup Guide', 'wp-copysafe-web'); ?></h3>
+        <a href="https://youtu.be/zG6EJGGsw8k" target="_blank" class="button"><?php echo esc_html__('Usage Video', 'wp-copysafe-web'); ?></a>
+        <a href="https://artistscope.com/docs/CopySafeWeb_WordPress_Installation.pdf" target="_blank" class="button"><?php echo esc_html__('Instruction PDF', 'wp-copysafe-web'); ?></a>
+        </div>
+
         <form action="" method="post">
-            <?php echo wp_kses(wp_nonce_field('wpcopysafeweb_settings', 'wpcopysafeweb_wpnonce'), wpcsw_kses_allowed_options()); ?>
+            <?php echo wp_kses(wp_nonce_field('wpcopysafeweb_settings', 'wpcopysafeweb_wpnonce'), wpcsw_instance()->settings->kses_allowed_options()); ?>
             <table cellpadding='1' cellspacing='0' border='0' id='wpcsw_page_setting'>
-                <p><strong>Default settings applied to all protected
-                        pages:</strong></p>
                 <tbody>
-                <tr>
-                    <td align='left' width='50'>&nbsp;</td>
-                    <td align='left' width='30'><img
-                                src='<?php echo esc_attr(WPCSW_PLUGIN_URL); ?>images/help-24-30.png'
-                                border='0'
-                                alt='Allow admin only for new uploads.'></td>
-                    <td align="left" nowrap>Allow Admin Only:</td>
-                    <td align="left"><input name="admin_only" type="checkbox"
-                                            value="checked" <?php echo $admin_only ? 'checked' : ''; ?>>
-                    </td>
+                <tr><td colspan="5">&nbsp;</td></tr>
+                <tr class="copysafe-section-title">
+                    <td colspan="5"><h2 class="title"><?php esc_html_e('Default settings applied to all protected pages:', 'wp-copysafe-web'); ?></h2></td>
                 </tr>
+                <tr><td colspan="5">&nbsp;</td></tr>
                 <tr>
-                    <td align='left' width='50'>&nbsp;</td>
-                    <td align='left' width='30'><img
-                                src='<?php echo esc_attr(WPCSW_PLUGIN_URL); ?>images/help-24-30.png'
-                                border='0'
-                                alt='Path to the upload folder for Web.'>
-                    <td align="left" nowrap>Upload Folder:</td>
-                    <td align="left"><input value="<?php echo esc_attr($upload_path); ?>"
+                    <td width="50">&nbsp;</td>
+                    <td width="30"><img src='<?php echo esc_attr(WPCSW_PLUGIN_URL); ?>images/help-24-30.png' alt='Path to the upload folder for Web.'></td>
+                    <td><?php esc_html_e('Upload Folder:', 'wp-copysafe-web'); ?></td>
+                    <td><input value="<?php echo esc_attr($upload_path); ?>"
                                             name="upload_path"
                                             class="regular-text code"
                                             type="text"><br />
-                        Only specify the folder name. It will be located in site's upload directory, <?php echo esc_attr($wp_upload_dir_path); ?>.
+                        <?php esc_html_e("Only specify the folder name. It will be located in site's upload directory,", 'wp-copysafe-web'); ?> <?php echo esc_attr($wp_upload_dir_path); ?>.
                     </td>
                 </tr>
                 <tr>
-                    <td align='left' width='50'>&nbsp;</td>
-                    <td align='left' width='30'><img
-                                src='<?php echo esc_attr(WPCSW_PLUGIN_URL); ?>images/help-24-30.png'
-                                border='0'
-                                alt='Set the mode to use. Use Licensed if you have licensed images. Otherwise set for Demo or Debug mode.'>
-                    </td>
-                    <td align="left">Mode</td>
-                    <td align="left"><select
-                                name="mode"><?php echo wp_kses($select, wpcsw_kses_allowed_options()); ?></select></td>
+                    <td>&nbsp;</td>
+                    <td><img src='<?php echo esc_attr(WPCSW_PLUGIN_URL); ?>images/help-24-30.png' alt='Set the mode to use. Use Licensed if you have licensed images. Otherwise set for Demo or Debug mode.'></td>
+                    <td><?php esc_html_e('Mode:', 'wp-copysafe-web'); ?></td>
+                    <td><select name="mode"><?php echo wp_kses($select, wpcsw_instance()->settings->kses_allowed_options()); ?></select></td>
                 </tr>
+                <tr><td colspan="5">&nbsp;</td></tr>
+                <tr class="copysafe-section-title">
+                    <td colspan="5"><h2 class="title"><?php esc_html_e('Operating system allowed', 'wp-copysafe-web'); ?></h2></td>
+                </tr>
+                <tr><td colspan="5">&nbsp;</td></tr>
                 <tr>
-                    <td align='left' width='50'>&nbsp;</td>
-                    <td align='left' width='30'><img
-                                src='<?php echo esc_attr(WPCSW_PLUGIN_URL); ?>images/help-24-30.png'
-                                border='0'
-                                alt='Enter minimum version for ArtisBrowser to allow access.'>
-                    </td>
-                    <td align="left">Minimum Version</td>
-                    <td align="left">
-                        <input type="text" size="8" name="latest_version" value="<?php echo esc_attr($latest_version ? $latest_version : 34.9); ?>" />
-                        <br />
-                        Enter minimum version for ArtisBrowser to check. 
-                    </td>
-                </tr>
-                <tr class="copysafe-video-browsers">
-                    <td colspan="5"><h2 class="title">Browser allowed</h2></td>
-                </tr>
-                <tr>
-                    <td align='left' width='50'>&nbsp;</td>
-                    <td align='left' width='30'><img
-                                src='<?php echo esc_attr(WPCSW_PLUGIN_URL); ?>images/help-24-30.png'
-                                border='0'
-                                alt='Allow visitors using the ArtisBrowser to access this page.'>
-                    </td>
-                    <td align="left" nowrap>Allow ArtisBrowser:</td>
-                    <td align="left"><input name="asps" type="checkbox"
-                                            value="checked" <?php echo esc_attr($asps); ?>>
+                    <td>&nbsp;</td>
+                    <td><img src="<?php echo esc_attr(WPCSW_PLUGIN_URL); ?>images/help-24-30.png" alt="<?php esc_attr_e('Allow visitors using Windows OS to access this page.', 'wp-copysafe-web'); ?>" /></td>
+                    <td><?php esc_html_e('Allow Windows:', 'wp-copysafe-web'); ?></td>
+                    <td>
+                        <div>
+                            <input type="checkbox" checked disabled />
+                            <input type="text" size="8"
+                                name="version_windows"
+                                placeholder="<?php echo esc_attr(WPCSW_MIN_BROWSER_VERSION); ?>"
+                                value="<?php echo esc_attr($version_windows ? $version_windows : WPCSW_MIN_BROWSER_VERSION); ?>" />
+                            <span><?php esc_html_e('Min. Version', 'wp-copysafe-web'); ?></span>
+                        </div>
                     </td>
                 </tr>
                 <tr>
-                    <td align='left' width='50'>&nbsp;</td>
-                    <td align='left' width='30'><img
-                                src='<?php echo esc_attr(WPCSW_PLUGIN_URL); ?>images/help-24-30.png'
-                                border='0'
-                                alt='Allow visitors using the Firefox web browser to access this page.'>
+                    <td>&nbsp;</td>
+                    <td><img src="<?php echo esc_attr(WPCSW_PLUGIN_URL); ?>images/help-24-30.png" alt="<?php esc_attr_e('Allow visitors using Mac OS to access this page.', 'wp-copysafe-web'); ?>" /></td>
+                    <td><?php esc_html_e('Allow Mac OSX:', 'wp-copysafe-web'); ?></td>
+                    <td>
+                        <div>
+                            <input name="allow_mac" type="checkbox" value="yes"<?php echo $allow_mac == 'yes' ? ' checked' : ''; ?> />
+                            <input type="text" size="8"
+                                name="version_mac"
+                                placeholder="<?php echo esc_attr(WPCSW_MIN_BROWSER_VERSION); ?>"
+                                value="<?php echo esc_attr($version_mac ? $version_mac : WPCSW_MIN_BROWSER_VERSION); ?>" />
+                            <span><?php esc_html_e('Min. Version', 'wp-copysafe-web'); ?></span>
+                        </div>
                     </td>
-                    <td align="left">Allow Firefox:</td>
-                    <td align="left"><input name="ff" type="checkbox"
-                                            <?php echo esc_attr($ff ? 'checked': ''); ?>> ( for test only )</td>
                 </tr>
                 <tr>
-                    <td align='left' width='50'>&nbsp;</td>
-                    <td align='left' width='30'><img
-                                src='<?php echo esc_attr(WPCSW_PLUGIN_URL); ?>images/help-24-30.png'
-                                border='0'
-                                alt='Allow visitors using the Chrome web browser to access this page.'>
+                    <td>&nbsp;</td>
+                    <td><img src="<?php echo esc_attr(WPCSW_PLUGIN_URL); ?>images/help-24-30.png" alt="<?php esc_attr_e('Allow visitors using Android to access this page.', 'wp-copysafe-web'); ?>" /></td>
+                    <td><?php esc_html_e('Allow Android:', 'wp-copysafe-web'); ?></td>
+                    <td>
+                        <div>
+                            <input name="allow_android" type="checkbox" value="yes"<?php echo $allow_android == 'yes' ? ' checked' : ''; ?> />
+                            <input type="text" size="8"
+                                name="version_android"
+                                placeholder="<?php echo esc_attr(WPCSW_MIN_BROWSER_VERSION); ?>"
+                                value="<?php echo esc_attr($version_android ? $version_android : WPCSW_MIN_BROWSER_VERSION); ?>" />
+                            <span><?php esc_html_e('Min. Version', 'wp-copysafe-web'); ?></span>
+                        </div>
                     </td>
-                    <td align="left">Allow Chrome:</td>
-                    <td align="left"><input name="ch" type="checkbox"
-                                            <?php echo esc_attr($ch ? 'checked' : ''); ?>> ( for test only )</td>
                 </tr>
+                <tr>
+                    <td>&nbsp;</td>
+                    <td><img src="<?php echo esc_attr(WPCSW_PLUGIN_URL); ?>images/help-24-30.png" alt="<?php esc_attr_e('Allow visitors using iOS to access this page.', 'wp-copysafe-web'); ?>" /></td>
+                    <td><?php esc_html_e('Allow iOS:', 'wp-copysafe-web'); ?></td>
+                    <td>
+                        <div>
+                            <input name="allow_ios" type="checkbox" value="yes"<?php echo $allow_ios == 'yes' ? ' checked' : ''; ?> />
+                            <input type="text" size="8"
+                                name="version_ios"
+                                placeholder="<?php echo esc_attr(WPCSW_MIN_BROWSER_VERSION); ?>"
+                                value="<?php echo esc_attr($version_ios ? $version_ios : WPCSW_MIN_BROWSER_VERSION); ?>" />
+                            <span><?php esc_html_e('Min. Version', 'wp-copysafe-web'); ?></span>
+                        </div>
+                    </td>
+                </tr>
+                <tr>
+                    <td>&nbsp;</td>
+                    <td><img src="<?php echo esc_attr(WPCSW_PLUGIN_URL); ?>images/help-24-30.png" alt="<?php esc_attr_e('Allow visitors using Linux OS to access this page.', 'wp-copysafe-web'); ?>" /></td>
+                    <td><?php esc_html_e('Allow Linux:', 'wp-copysafe-web'); ?></td>
+                    <td>
+                        <div>
+                            <input name="allow_linux" type="checkbox" value="yes"<?php echo $allow_linux == 'yes' ? ' checked' : ''; ?> />
+                            <input type="text" size="8"
+                                name="version_linux"
+                                placeholder="<?php echo esc_attr(WPCSW_MIN_BROWSER_VERSION); ?>"
+                                value="<?php echo esc_attr($version_linux ? $version_linux : WPCSW_MIN_BROWSER_VERSION); ?>" />
+                            <span><?php esc_html_e('Min. Version', 'wp-copysafe-web'); ?></span>
+                        </div>
+                    </td>
+                </tr>
+                <tr><td colspan="5"><hr /></td></tr>
+                <tr>
+                    <td>&nbsp;</td>
+                    <td><img src="<?php echo esc_attr(WPCSW_PLUGIN_URL); ?>images/help-24-30.png" alt="<?php esc_attr_e('Prevent viewing by remote or virtual computers when the class image loads.', 'wp-copysafe-web'); ?>" /></td>
+                    <td><?php esc_html_e('Allow Remote:', 'wp-copysafe-web'); ?></td>
+                    <td>
+                        <select name="allow_remote">
+                            <option value="yes"><?php esc_html_e('Yes', 'wp-copysafe-web'); ?></option>
+                            <option value="no"<?php echo $allow_remote == 'no' ? ' selected' : ''; ?>><?php esc_html_e('No', 'wp-copysafe-web'); ?></option>
+                        </select>
+                    </td>
+                </tr>
+                <?php
+                /*
+                <tr><td colspan="5">&nbsp;</td></tr>
+                <tr class="copysafe-section-title">
+                    <td colspan="5"><h2 class="title"><?php esc_attr_e('Watermark Style Settings', 'wp-copysafe-web'); ?></h2></td>
+                </tr>
+                <tr><td colspan="5">&nbsp;</td></tr>
+                <tr>
+                    <td width="50">&nbsp;</td>
+                    <td width="30">
+                        <img src="<?php echo esc_attr(WPCSW_PLUGIN_URL); ?>images/help-24-30.png" alt="Allow watermarking?">
+                    </td>
+                    <td><?php esc_attr_e('Enabled', 'wp-copysafe-web'); ?></td>
+                    <td><input name="watermarked" type="checkbox"<?php echo esc_attr($watermarked); ?> /></td>
+                </tr>
+                <tr>
+                    <td>&nbsp;</td>
+                    <td><img src="<?php echo esc_attr(WPCSW_PLUGIN_URL); ?>images/help-24-30.png" alt="Text Size (in pixels)"></td>
+                    <td><?php esc_html_e('Watermark Text Size (in pixels):', 'wp-copysafe-web'); ?></td>
+                    <td>
+                        <select name="wtmtextsize">
+                            <?php foreach($wtm_text_size_options as $value) : ?>
+                            <option value="<?php echo esc_attr($value); ?>"<?php echo $value == $wtmtextsize ? ' selected' : ''; ?>><?php echo esc_html($value); ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </td>
+                </tr>
+                <tr>
+                    <td>&nbsp;</td>
+                    <td><img src="<?php echo esc_attr(WPCSW_PLUGIN_URL); ?>images/help-24-30.png" alt="Watermark Text Color"></td>
+                    <td><?php esc_html_e('Text Color:', 'wp-copysafe-web'); ?></td>
+                    <td>
+                        <select name="wtmtextcolour">
+                            <?php foreach($wtm_text_colour_options as $key => $value) : ?>
+                            <option value="<?php echo esc_attr($key); ?>"<?php echo $key == $wtmtextcolour ? ' selected' : ''; ?>><?php echo esc_html($value); ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </td>
+                </tr>
+                <tr>
+                    <td>&nbsp;</td>
+                    <td><img src="<?php echo esc_attr(WPCSW_PLUGIN_URL); ?>images/help-24-30.png" alt="CSS code for Shade color for watermark."></td>
+                    <td><?php esc_html_e('Shade Color:', 'wp-copysafe-web'); ?></td>
+                    <td>
+                        <select name="wtmshadecolour">
+                            <?php foreach($wtm_shade_colour_options as $key => $value) : ?>
+                            <option value="<?php echo esc_attr($key); ?>"<?php echo $key == $wtmshadecolour ? ' selected' : ''; ?>><?php echo esc_html($value); ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </td>
+                </tr>
+                <tr>
+                    <td>&nbsp;</td>
+                    <td><img src="<?php echo esc_attr(WPCSW_PLUGIN_URL); ?>images/help-24-30.png" alt="Watermark Text Position"></td>
+                    <td><?php esc_html_e('Text Position:', 'wp-copysafe-web'); ?></td>
+                    <td>
+                        <select name="wtmtextposition">
+                            <?php foreach($wtm_text_position_options as $key => $value) : ?>
+                            <option value="<?php echo esc_attr($key); ?>"<?php echo $key == $wtmtextposition ? ' selected' : ''; ?>><?php echo esc_html($value); ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </td>
+                </tr>
+                <tr>
+                    <td>&nbsp;</td>
+                    <td><img src="<?php echo esc_attr(WPCSW_PLUGIN_URL); ?>images/help-24-30.png" alt="Watermark Text Opacity"></td>
+                    <td><?php esc_html_e('Opacity:', 'wp-copysafe-web'); ?></td>
+                    <td>
+                        <select name="wtmtextopacity">
+                            <?php foreach($wtm_text_opacity_options as $key => $value) : ?>
+                            <option value="<?php echo esc_attr($key); ?>"<?php echo $key == $wtmtextopacity ? ' selected' : ''; ?>><?php echo esc_html($value); ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </td>
+                </tr>
+                */
+                ?>
                 </tbody>
             </table>
             <p class="submit">
-                <input type="submit" value="Save Settings"
-                       class="button-primary" id="submit" name="submit">
+                <input type="submit" value="<?php esc_attr_e('Save Settings', 'wp-copysafe-web'); ?>" class="button-primary" id="submit" name="submit">
             </p>
         </form>
         <div class="clear"></div>

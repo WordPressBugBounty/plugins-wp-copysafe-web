@@ -34,7 +34,7 @@ if( ! Class_Exists('WPCSWPOPUP'))
 
 		public function set_media_upload()
 		{
-			include(WPCSW_PLUGIN_PATH . "media-upload.php");
+			wpcsw_instance()->backend_media->uploader();
 		}
 
 		public function add_popup_script()
@@ -53,5 +53,5 @@ if( ! Class_Exists('WPCSWPOPUP'))
 		}
 	}
 
-	$popup = new WPCSWPOPUP ();
+	$WPCSW_POPUP = new WPCSWPOPUP();
 }

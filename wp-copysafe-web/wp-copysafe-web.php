@@ -3,10 +3,10 @@
 /*
 Plugin Name: CopySafe Web Protection
 Plugin URI: https://artistscope.com/copysafe_web_protection_wordpress_plugin.asp
-Description: Add copy protection from PrintScreen and screen capture. Copysafe Web uses encrypted images and domain lock to apply copy protection for all media displayed on the web page.
+Description: Add copy protection from PrintScreen and screen capture. Copysafe Web uses encrypted images and domain lock to apply copy protection for all media displayed on the web page. Click here for the <a href="https://youtu.be/zG6EJGGsw8k" target="_blank">Usage Video</a> and the <a href="https://artistscope.com/docs/CopySafeWeb_WordPress_Installation.pdf" target="_blank">Setup Guide</a>.
 Author: ArtistScope
 Text Domain: wp-copysafe-web
-Version: 4.3
+Version: 5.2
 License: GPLv2
 Author URI: https://artistscope.com/
 
@@ -38,14 +38,75 @@ if( ! defined('ABSPATH')) {
 	exit;
 } // Exit if accessed directly
 
-set_time_limit(300);
-
-define('WPCSW_ASSET_VERSION', 1.04);
+define('WPCSW_ASSET_VERSION', 1.105);
+define('WPCSW_MIN_BROWSER_VERSION', 35);
+define('WPCSW_DOWNLOAD_URL', 'https://artisbrowser.com/download/');
+define('WPCSW_DIR', __DIR__);
 
 require_once __DIR__ . "/function.php";
-require_once __DIR__ . "/function-common.php";
 require_once __DIR__ . "/function-page.php";
-require_once __DIR__ . "/function-shortcode.php";
+
+class WPCSW_Main {
+
+	protected static $instance = null;
+
+	public
+		$settings,
+		$cache,
+		$data,
+		$frontend,
+		$backend,
+		$backend_media,
+		$shortcode,
+		$gutenberg,
+		$elementor;
+
+	protected function __construct()
+	{
+		require_once WPCSW_DIR . '/includes/settings.php';
+		require_once WPCSW_DIR . '/includes/cache.php';
+		require_once WPCSW_DIR . '/includes/data.php';
+		require_once WPCSW_DIR . '/includes/frontend.php';
+		require_once WPCSW_DIR . '/includes/backend.php';
+		require_once WPCSW_DIR . '/includes/backend-media.php';
+		require_once WPCSW_DIR . '/includes/shortcode.php';
+		require_once WPCSW_DIR . '/includes/gutenberg/gutenberg.php';
+		require_once WPCSW_DIR . '/includes/elementor/elementor.php';
+
+		$this->settings = new WPCSW_Settings;
+		$this->cache = new WPCSW_Cache;
+		$this->data = new WPCSW_Data;
+		$this->frontend = new WPCSW_Frontend;
+		$this->backend = new WPCSW_Backend;
+		$this->backend_media = new WPCSW_Backend_Media;
+		$this->shortcode = new WPCSW_Shortcode;
+		$this->gutenberg = new WPCSW_Gutenberg;
+		$this->elementor = new WPCSW_Elementor;
+	}
+
+	public static function instance()
+	{
+		if(self::$instance == null)
+		{
+			$class_name = __CLASS__;
+			self::$instance = new $class_name();
+		}
+
+		return self::$instance;
+	}
+
+	private function __clone() { }
+
+	public function __wakeup() {
+		throw new Exception('Cannot unserialize a singleton.');
+	}
+}
+
+function wpcsw_instance() {
+	return WPCSW_Main::instance();
+}
+
+wpcsw_instance();
 
 function wpcsw_enable_extended_upload($mime_types = []) {
 	// You can add as many MIME types as you want.
@@ -122,13 +183,10 @@ function wpcsw_delete_file_options($file_name) {
 // ============================================================================================================================
 # install media buttons
 function wpcsw_media_buttons($context) {
-	global $post_ID;
-	// generate token for links
-	$token = wp_create_nonce('wpcsw_token');
-	$url = admin_url('?wpcsw-popup=copysafe&wpcsw_token=' . $token . '&post_id=' . $post_ID);
+	$url = wpcsw_instance()->backend->getPopupUrl();
 	echo wp_kses(
 		"<a href='" . esc_attr($url) . "' class='thickbox' id='wpcsw_link' data-body='no-overflow' title='CopySafe Web'><img src='" . esc_attr(plugin_dir_url(__FILE__)) . "/images/copysafebutton.png'></a>",
-		wpcsw_kses_allowed_options()
+		wpcsw_instance()->settings->kses_allowed_options()
 	);
 }
 
@@ -141,47 +199,12 @@ function wpcsw_admin_load_js() {
 	wp_enqueue_script('suggest');
 }
 
-// ============================================================================================================================
-# admin page styles
-function wpcsw_admin_load_styles() {
-	// register custom CSS file & load
-	wp_register_style('wpcsw-style', plugins_url('css/wp-copysafe-web.css', __FILE__), [], WPCSW_ASSET_VERSION);
-	wp_enqueue_style('wpcsw-style');
-}
-
 function wpcsw_is_admin_postpage() {
-	$script_name = explode("/", $_SERVER["SCRIPT_NAME"]);
+	$script_name = explode("/", isset($_SERVER["SCRIPT_NAME"]) ? sanitize_text_field(wp_unslash($_SERVER["SCRIPT_NAME"])) : '');
 	$ppage = end($script_name);
 	if ($ppage == "post-new.php" || $ppage == "post.php") {
 		return TRUE;
 	}
-}
-
-function wpcsw_includecss_js() {
-	if (!wpcsw_is_admin_postpage()) {
-		return;
-	}
-	global $wp_popup_upload_lib;
-	if ($wp_popup_upload_lib) {
-		return;
-	}
-	$wp_popup_upload_lib = TRUE;
-	
-	wp_enqueue_style('jquery-ui-1.9');
-
-	wp_enqueue_script('jquery');
-	wp_enqueue_script('jquery-ui-progressbar');
-	wp_enqueue_script('jquery.json');
-}
-
-function wpcsw_load_admin_scripts() {
-	wp_register_style('jquery-ui-1.9', '//code.jquery.com/ui/1.9.2/themes/redmond/jquery-ui.css', [], WPCSW_ASSET_VERSION);
-
-	wp_register_script('wp-copysafeweb-uploader', WPCSW_PLUGIN_URL . 'js/copysafe_media_uploader.js', [
-		'jquery',
-		'plupload-all',
-	], WPCSW_ASSET_VERSION,
-	['in_footer' => true]);
 }
 
 // ============================================================================================================================
@@ -198,19 +221,17 @@ function wpcsw_setup()
 	$upload_path = $wp_upload_dir_path . '/' . $options["settings"]["upload_path"];
 	define('WPCSW_UPLOAD_PATH', $upload_path); //use for include files to other files
 
-	$wp_upload_dir = wp_upload_dir();
 	$wp_upload_dir_url = str_replace("\\", "/", $wp_upload_dir['baseurl']);
 	$upload_url = $wp_upload_dir_url . '/' . $options["settings"]["upload_path"];
 	define('WPCSW_UPLOAD_URL', $upload_url);
 
-	add_action('admin_head', 'wpcsw_includecss_js');
 	add_action('wp_ajax_wpcsw_ajaxprocess', 'wpcsw_ajaxprocess');
 
 	//Sanitize the GET input variables
-	$pagename = !empty(@$_GET['page']) ? sanitize_key(@$_GET['page']) : '';
-	$cswfilename = !empty(@$_GET['cswfilename']) ? sanitize_file_name(@$_GET['cswfilename']) : '';
-	$action = !empty(@$_GET['action']) ? sanitize_key(@$_GET['action']) : '';
-	$cswdel_nonce = !empty(@$_GET['cswdel_nonce']) ? sanitize_key(@$_GET['cswdel_nonce']) : '';
+	$pagename = !empty($_GET['page']) ? sanitize_key(wp_unslash($_GET['page'])) : '';
+	$cswfilename = !empty($_GET['cswfilename']) ? sanitize_file_name(wp_unslash($_GET['cswfilename'])) : '';
+	$action = !empty($_GET['action']) ? sanitize_key(wp_unslash($_GET['action'])) : '';
+	$cswdel_nonce = !empty($_GET['cswdel_nonce']) ? sanitize_key(wp_unslash($_GET['cswdel_nonce'])) : '';
 
 	if ($pagename == 'wpcsw_list' && $cswfilename && $action == 'cswdel')
 	{
@@ -220,29 +241,17 @@ function wpcsw_setup()
 			if (file_exists(WPCSW_UPLOAD_PATH . $cswfilename)) {
 				wp_delete_file(WPCSW_UPLOAD_PATH . $cswfilename);
 			}
-			wp_redirect('admin.php?page=wpcsw_list');
+			wp_safe_redirect('admin.php?page=wpcsw_list');
 		}
 		else {
 			wp_nonce_ays('');
 		}
 	}
 
-	if (isset($_GET['wpcsw-popup']) && @$_GET["wpcsw-popup"] == "copysafe") {
+	if (isset($_GET['wpcsw-popup']) && $_GET["wpcsw-popup"] == "copysafe") {
 		require_once(WPCSW_PLUGIN_PATH . "popup_load.php");
 		exit();
 	}
-
-	//=============================
-	// load js file
-	add_action('wp_enqueue_scripts', 'wpcsw_load_js');
-
-	add_action('admin_enqueue_scripts', 'wpcsw_load_admin_scripts');
-
-	// load admin CSS
-	add_action('admin_print_styles', 'wpcsw_admin_load_styles');
-
-	// add short code
-	add_shortcode('copysafe', 'wpcsw_shortcode');
 
 	// if user logged in
 	if (is_user_logged_in()) {
@@ -257,9 +266,6 @@ function wpcsw_setup()
 			add_action('media_buttons', 'wpcsw_media_buttons');
 		}
 	}
-
-	wp_register_script('wpcsw-plugin-script', WPCSW_PLUGIN_URL . 'js/copysafe_media_uploader.js', [], WPCSW_ASSET_VERSION, ['in_footer' => true]);
-	wp_register_script('jquery.json', WPCSW_PLUGIN_URL . 'lib/jquery.json-2.3.js', [], WPCSW_ASSET_VERSION, ['in_footer' => true]);
 }
 
 // ============================================================================================================================
@@ -268,20 +274,16 @@ function wpcsw_activate() {
 	$wp_upload_dir = wp_upload_dir();
 	$wp_upload_dir_path = str_replace("\\", "/", $wp_upload_dir['basedir']);
 
-	// if this is first activation, setup plugin options
-	if (!get_option('wpcsw_settings')) {
+	//if this is first activation, setup plugin options
+	if( ! get_option('wpcsw_settings')) {
 		// set plugin folder
 		$upload_dir = 'copysafe-web/';
 		$upload_path = $wp_upload_dir_path . '/' . $upload_dir;
 
 		// set default options
 		$wpcsw_options['settings'] = [
-			'admin_only' => "checked",
 			'upload_path' => $upload_dir,
 			'mode' => "demo",
-			'asps' => "checked",
-			'ff' => "",
-			'ch' => "",
 		];
 
 		update_option('wpcsw_settings', $wpcsw_options);
@@ -350,45 +352,6 @@ function wpcsw_uninstall() {
 	wpcsw_delete_shortcode();
 }
 
-function wpcsw_load_js() {
-	wp_register_script('wp-copysafeweb', WPCSW_PLUGIN_URL . 'js/wp-copysafe-web.js', [], WPCSW_ASSET_VERSION, ['in_footer' => true]);
-}
-
-function wpcsw_admin_head() {
-	$uploader_options = [
-		'runtimes' => 'html5,silverlight,flash,html4',
-		'browse_button' => 'wpcsw-plugin-uploader-button',
-		'container' => 'wpcsw-plugin-uploader',
-		'drop_element' => 'wpcsw-plugin-uploader',
-		'file_data_name' => 'async-upload',
-		'multiple_queues' => TRUE,
-		'max_file_size' => wp_max_upload_size() . 'b',
-		'url' => admin_url('admin-ajax.php'),
-		'flash_swf_url' => includes_url('js/plupload/plupload.flash.swf'),
-		'silverlight_xap_url' => includes_url('js/plupload/plupload.silverlight.xap'),
-		'filters' => [
-			[
-			'title' => __('Allowed Files'),
-			'extensions' => '*',
-			],
-		],
-		'multipart' => TRUE,
-		'urlstream_upload' => TRUE,
-		'multi_selection' => TRUE,
-		'multipart_params' => [
-			'_ajax_nonce' => '',
-			'action' => 'wpcsw-plugin-upload-action',
-		],
-	];
-	?>
-<script type="text/javascript">
-	var global_uploader_options = <?php echo wp_json_encode($uploader_options); ?>;
-</script>
-	<?php
-}
-
-add_action('admin_head', 'wpcsw_admin_head');
-
 function wpcsw_includecss_js_to_footer(){
 	if (!wpcsw_is_admin_postpage())
 		return;
@@ -408,13 +371,16 @@ function wpcsw_includecss_js_to_footer(){
 add_action('admin_footer', 'wpcsw_includecss_js_to_footer');
 
 function wpcsw_ajax_action() {
-	add_filter('upload_dir', 'wpcsw_upload_dir');
-
 	$response = [];
-	
-	// check ajax nonce
-	//check_ajax_referer( __FILE__ );
+
+	$nonce = isset($_POST['_ajax_nonce']) ? sanitize_text_field(wp_unslash($_POST['_ajax_nonce'])) : '';
+	if ( ! wp_verify_nonce($nonce, 'wpcsw_upload_nonce')) {
+		wp_send_json_error();
+	}
+
 	if (current_user_can('upload_files')) {
+		add_filter('upload_dir', 'wpcsw_upload_dir');
+
 		// handle file upload
 		$id = media_handle_upload(
 			'async-upload',
@@ -438,21 +404,15 @@ function wpcsw_ajax_action() {
 			$response['attachment']['id'] = $id;
 			$response['attachment']['src'] = $src[0];
 		}
+
+		remove_filter('upload_dir', 'wpcsw_upload_dir');
 	}
 
-	remove_filter('upload_dir', 'wpcsw_upload_dir');
-	echo wp_json_encode($response);
-	exit;
+	wp_send_json($response);
 }
 
 add_action('wp_ajax_wpcsw-plugin-upload-action', 'wpcsw_ajax_action');
 
-function wpcsw_upload_dir($upload) {
-	$upload['subdir'] = '/copysafe-web';
-	$upload['path'] = $upload['basedir'] . $upload['subdir'];
-	$upload['url'] = $upload['baseurl'] . $upload['subdir'];
-	return $upload;
-}
 
 // ============================================================================================================================
 # register plugin hooks

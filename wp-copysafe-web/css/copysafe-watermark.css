@@ -1,0 +1,59 @@
+.wpcsw-wrapper {
+  position: relative;
+}
+.wpcsw-wrapper object {
+  position: relative;
+  display:block;
+  max-width: 100%;
+  z-index: 20;
+}
+.wpcsw-watermark {
+  position: absolute;
+  z-index: 40;
+}
+
+.wpcsw-watermark.watermark-Top {
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+.wpcsw-watermark.watermark-TopLeft {
+  left: 10px;
+  top: 10px;
+}
+.wpcsw-watermark.watermark-TopRight {
+  right: 10px;
+  top: 10px;
+}
+.wpcsw-watermark.watermark-Bottom {
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+.wpcsw-watermark.watermark-BottomRight {
+  right: 10px;
+  bottom: 10px;
+}
+.wpcsw-watermark.watermark-BottomLeft {
+  left: 10px;
+  bottom: 10px;
+}
+.wpcsw-watermark.watermark-Center {
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+.wpcsw-watermark.watermark-Random {
+  top: 50px;
+  left: 50px;
+}
+.wpcsw-watermark.watermark-Rotating {
+  animation: wpcsw_rotating_animation 50s infinite;
+  animation-direction: alternate-reverse;
+}
+@keyframes wpcsw_rotating_animation
+  { 0% {left: 10px; top: 10px;} 25%
+  { left:calc(100% - 200px); top: 10px;} 50%
+  { left: calc(100% - 200px); top: calc(100% - 60px);} 75%
+  { left: 0px; top: calc(100% - 60px);} 100%
+  { left: 0px; top: 0px;}}
